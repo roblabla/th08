@@ -77,14 +77,14 @@ struct Supervisor
 {
     void EnterCriticalSectionWrapper(int id)
     {
-        EnterCriticalSection(&this->criticalSections[id]);
-        this->criticalSectionLockCounts[id]++;
+        EnterCriticalSection(&criticalSections[id]);
+        criticalSectionLockCounts[id]++;
     }
 
     void LeaveCriticalSectionWrapper(int id)
     {
-        LeaveCriticalSection(&this->criticalSections[id]);
-        this->criticalSectionLockCounts[id]--;
+        LeaveCriticalSection(&criticalSections[id]);
+        criticalSectionLockCounts[id]--;
     }
 
     HINSTANCE hInstance;

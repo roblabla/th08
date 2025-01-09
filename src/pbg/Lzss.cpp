@@ -160,7 +160,7 @@ LPBYTE Lzss::Encode(LPBYTE in, i32 uncompressedSize, i32 *compressedSize)
 
 #define DEC_WRITE_BYTE(data)                                                                                           \
     *outCursor++ = data;                                                                                               \
-    m_Dict[dictHead] = data;                                                                                       \
+    m_Dict[dictHead] = data;                                                                                           \
     dictHead = LZSS_DICTPOS_MOD(dictHead, 1);
 
 #define DEC_HANDLE_FETCH_NEW_BYTE()                                                                                    \

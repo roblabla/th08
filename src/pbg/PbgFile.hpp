@@ -42,7 +42,7 @@ class CPbgFile : public IPbgFile
 
     DWORD ReadInt(i32 *outData)
     {
-        return this->Read(outData, 4);
+        return Read(outData, 4);
     }
 
   protected:

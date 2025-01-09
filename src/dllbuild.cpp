@@ -33,9 +33,10 @@
 // script, scripts/generate_detours.py, based on the information found in
 // config/implemented.csv.
 
-#include <D3D8.h>
-#include <D3DX8.h>
-#include "detours.h"
+#include <d3d8.h>
+#include <d3dx8.h>
+
+#include "detours.h
 #include <fstream>
 #include <string.h>
 

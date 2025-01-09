@@ -18,12 +18,12 @@ struct PbgArchiveEntry
 {
     PbgArchiveEntry()
     {
-        this->filename = NULL;
+        filename = NULL;
     }
 
     ~PbgArchiveEntry()
     {
-        MemFree(this->filename);
+        MemFree(filename);
     }
 
     char *filename;

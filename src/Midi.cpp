@@ -1,5 +1,5 @@
 #include "inttypes.hpp"
-#include <windows.h>
+#include <Windows.h>
 #include <mmreg.h>
 #include <mmsystem.h>
 
@@ -19,7 +19,7 @@ MidiDevice::MidiDevice()
 
 MidiDevice::~MidiDevice()
 {
-    this->Close();
+    Close();
 }
 
 BOOL MidiDevice::OpenDevice(UINT uDeviceId)
@@ -28,7 +28,7 @@ BOOL MidiDevice::OpenDevice(UINT uDeviceId)
     {
         if (m_DeviceId != uDeviceId)
         {
-            this->Close();
+            Close();
         }
         else
         {
@@ -109,13 +109,13 @@ MidiTimer::MidiTimer()
 
 MidiTimer::~MidiTimer()
 {
-    this->StopTimerImpl();
+    StopTimerImpl();
     timeEndPeriod(m_TimeCaps.wPeriodMin);
 }
 
 UINT MidiTimer::StartTimerImpl(u32 delay, LPTIMECALLBACK cb, DWORD_PTR data)
 {
-    this->StopTimerImpl();
+    StopTimerImpl();
     timeBeginPeriod(m_TimeCaps.wPeriodMin);
 
     if (cb != NULL)
@@ -205,11 +205,11 @@ MidiOutput::MidiOutput()
 
 MidiOutput::~MidiOutput()
 {
-    this->StopPlayback();
-    this->ClearTracks();
+    StopPlayback();
+    ClearTracks();
     for (i32 i = 0; i < 32; i++)
     {
-        this->ReleaseFileData(i);
+        ReleaseFileData(i);
     }
 }
 
@@ -217,10 +217,10 @@ ZunResult MidiOutput::ReadFileData(int idx, LPCSTR path)
 {
     if (m_MidiHeadersCursor == idx)
     {
-        this->StopPlayback();
+        StopPlayback();
     }
 
-    this->ReleaseFileData(idx);
+    ReleaseFileData(idx);
 
     if (m_MidiFileData[idx] = NULL)
     {
@@ -259,7 +259,7 @@ ZunResult MidiOutput::ParseFile(int fileIdx)
     LPBYTE fileData;
     u32 hdrLength;
 
-    this->ClearTracks();
+    ClearTracks();
     currentCursor = m_MidiFileData[fileIdx];
     fileData = currentCursor;
     if (currentCursor == NULL)
@@ -319,13 +319,13 @@ ZunResult MidiOutput::ParseFile(int fileIdx)
 
 ZunResult MidiOutput::LoadFile(LPCSTR midiPath)
 {
-    if (this->ReadFileData(0x1f, midiPath) != ZUN_SUCCESS)
+    if (ReadFileData(0x1f, midiPath) != ZUN_SUCCESS)
     {
         return ZUN_ERROR;
     }
 
-    this->ParseFile(0x1f);
-    this->ReleaseFileData(0x1f);
+    ParseFile(0x1f);
+    ReleaseFileData(0x1f);
 
     return ZUN_SUCCESS;
 }
@@ -357,9 +357,9 @@ ZunResult MidiOutput::Play()
         return ZUN_ERROR;
     }
 
-    this->LoadTracks();
+    LoadTracks();
     m_MidiOutDev.OpenDevice(MIDI_MAPPER);
-    this->StartTimerImpl(1, NULL, NULL);
+    StartTimerImpl(1, NULL, NULL);
     utils::DebugPrint(" midi play\n");
 
     return ZUN_SUCCESS;
@@ -376,11 +376,11 @@ ZunResult MidiOutput::StopPlayback()
     {
         if (m_MidiHeaders[i] != NULL)
         {
-            this->UnprepareHeader(m_MidiHeaders[i]);
+            UnprepareHeader(m_MidiHeaders[i]);
         }
     }
 
-    this->StopTimerImpl();
+    StopTimerImpl();
     m_MidiOutDev.Close();
     m_MidiFileIndex = -1;
 
@@ -519,8 +519,7 @@ void MidiOutput::ProcessMsg(MidiTrack *track)
                 UnprepareHeader(m_MidiHeaders[m_MidiHeadersCursor]);
             }
 
-            midiHdr = m_MidiHeaders[m_MidiHeadersCursor] =
-                (LPMIDIHDR)g_ZunMemory.Alloc(sizeof(MIDIHDR), "midiHDR");
+            midiHdr = m_MidiHeaders[m_MidiHeadersCursor] = (LPMIDIHDR)g_ZunMemory.Alloc(sizeof(MIDIHDR), "midiHDR");
             curTrackLength = MidiOutput::SkipVariableLength(&track->curTrackDataCursor);
             memset(midiHdr, 0, sizeof(MIDIHDR));
             midiHdr->lpData = (LPSTR)g_ZunMemory.Alloc(curTrackLength + 1, "midiHDR->lpData");

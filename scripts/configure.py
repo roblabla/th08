@@ -106,8 +106,7 @@ def configure(build_type):
 
         munit_sources = ["munit"]
 
-        test_sources = [
-        ]
+        test_sources = []
 
         detours_sources = [
             "detours",

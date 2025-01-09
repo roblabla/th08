@@ -13,7 +13,7 @@ CPbgFile::CPbgFile()
 
 CPbgFile::~CPbgFile()
 {
-    this->Close();
+    Close();
 }
 
 #pragma var_order(curMode, goToEnd, filePathBuffer, creationDisposition)
@@ -23,7 +23,7 @@ bool CPbgFile::Open(const char *filename, char *mode)
     BOOL goToEnd = FALSE;
     char filePathBuffer[MAX_PATH];
 
-    this->Close();
+    Close();
 
     char *curMode;
     for (curMode = mode; *curMode != '\0'; curMode++)
@@ -57,7 +57,7 @@ bool CPbgFile::Open(const char *filename, char *mode)
 
     GetFullFilePath(filePathBuffer, filename);
     m_Handle = CreateFileA(filePathBuffer, m_Access, FILE_SHARE_READ, NULL, creationDisposition,
-                               FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 
     if (m_Handle == INVALID_HANDLE_VALUE)
     {
@@ -146,7 +146,7 @@ HGLOBAL CPbgFile::ReadWholeFile(DWORD maxSize)
         return NULL;
     }
 
-    DWORD dataLen = this->GetSize();
+    DWORD dataLen = GetSize();
     if (dataLen > maxSize)
     {
         return NULL;
@@ -158,13 +158,13 @@ HGLOBAL CPbgFile::ReadWholeFile(DWORD maxSize)
         return NULL;
     }
 
-    DWORD oldLocation = this->Tell();
-    if (this->Seek(oldLocation, g_PbgFileSeekModes[0]) == 0)
+    DWORD oldLocation = Tell();
+    if (Seek(oldLocation, g_PbgFileSeekModes[0]) == 0)
     {
         return NULL;
     }
 
-    if (this->Read(data, dataLen) == 0)
+    if (Read(data, dataLen) == 0)
     {
         if (data)
         {
@@ -174,7 +174,7 @@ HGLOBAL CPbgFile::ReadWholeFile(DWORD maxSize)
         return NULL;
     }
 
-    this->Seek(oldLocation, g_PbgFileSeekModes[0]);
+    Seek(oldLocation, g_PbgFileSeekModes[0]);
     return data;
 }
 

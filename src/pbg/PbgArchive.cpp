@@ -16,12 +16,12 @@ PbgArchive::PbgArchive()
 
 PbgArchive::~PbgArchive()
 {
-    this->Release();
+    Release();
 }
 
 bool PbgArchive::Load(LPCSTR filename)
 {
-    this->Release();
+    Release();
     utils::DebugPrint("info : %s open arcfile\n", filename);
 
     m_FileAbstraction = NewEx(CPbgFile());
@@ -30,9 +30,9 @@ bool PbgArchive::Load(LPCSTR filename)
         return false;
     }
 
-    if (this->ParseHeader(filename))
+    if (ParseHeader(filename))
     {
-        m_Filename = this->CopyFileName(filename);
+        m_Filename = CopyFileName(filename);
         if (m_Filename != NULL)
         {
             return true;
@@ -40,7 +40,7 @@ bool PbgArchive::Load(LPCSTR filename)
     }
 
     utils::DebugPrint("info : %s not found\n", filename);
-    this->Release();
+    Release();
     return false;
 }
 
@@ -69,7 +69,7 @@ LPBYTE PbgArchive::ReadDecompressEntry(LPCSTR filename, LPBYTE outBuffer)
         return NULL;
     }
 
-    PbgArchiveEntry *entry = this->FindEntry(filename);
+    PbgArchiveEntry *entry = FindEntry(filename);
     if (entry == NULL)
     {
         goto entry_read_error;
@@ -109,7 +109,7 @@ entry_read_error:
 
 DWORD PbgArchive::GetEntryDecompressedSize(LPCSTR filename)
 {
-    PbgArchiveEntry *entry = this->FindEntry(filename);
+    PbgArchiveEntry *entry = FindEntry(filename);
     if (entry != NULL)
         return entry->decompressedSize;
     return 0;
@@ -214,7 +214,7 @@ bool PbgArchive::ParseHeader(LPCSTR filename)
         goto parse_error;
     }
 
-    m_Entries = this->AllocEntries(entryBuffer, m_NumOfEntries, fileTableOffset);
+    m_Entries = AllocEntries(entryBuffer, m_NumOfEntries, fileTableOffset);
     if (m_Entries == NULL)
     {
         goto parse_error;
@@ -252,7 +252,7 @@ PbgArchiveEntry *PbgArchive::AllocEntries(LPVOID entryBuffer, i32 count, u32 dat
     entryData = entryBuffer;
     for (i = 0; i < count; i++)
     {
-        buffer[i].filename = this->CopyFileName((char *)entryData);
+        buffer[i].filename = CopyFileName((char *)entryData);
         SeekPastString(&entryData);
         buffer[i].dataOffset = *(u32 *)entryData;
         SeekPastInt(&entryData);
