@@ -1,0 +1,11 @@
+build
+diff
+*.obj
+*.exe
+log.txt
+scripts/dls
+scripts/prefix
+build.ninja
+__pycache__
+.vscode
+
