@@ -146,5 +146,98 @@ FormatInfo *TextHelper::GetFormatInfo(D3DFORMAT format)
     }
     return &g_FormatInfoArray[local_8];
 }
+
+struct A1R5G5B5
+{
+    u16 blue : 5;
+    u16 green : 5;
+    u16 red : 5;
+    u16 alpha : 1;
+};
+
+#pragma var_order(bufferRegion, idx, doubleArea, tempColor, bufferCursor, bufferStart)
+bool TextHelper::InvertAlpha(i32 x, i32 y, i32 spriteWidth, i32 fontHeight, BOOL param_5)
+{
+    i32 doubleArea;
+    u8 *bufferRegion;
+    i32 idx;
+    A1R5G5B5 *bufferCursor;
+
+    i32 tempColor;
+
+    doubleArea = spriteWidth * fontHeight * 2;
+    bufferRegion = &GetBuffer()[y * spriteWidth * 2];
+    switch (m_format)
+    {
+    case D3DFMT_A8R8G8B8:
+        for (idx = 3; idx < doubleArea; idx += 4)
+        {
+            bufferRegion[idx] = bufferRegion[idx] ^ 0xff;
+        }
+        break;
+    case D3DFMT_A1R5G5B5:
+        for (bufferCursor = (A1R5G5B5 *)bufferRegion, idx = 0; idx < doubleArea; idx += 2, bufferCursor += 1)
+        {
+            bufferCursor->alpha ^= 1;
+            if (bufferCursor->alpha)
+            {
+                if (!param_5)
+                {
+                    if (bufferCursor->red >= bufferCursor->blue)
+                    {
+                        tempColor = bufferCursor->red - bufferCursor->red * idx * 2 / doubleArea / 3;
+                        bufferCursor->red = tempColor >= 0x20 ? 0x1f : tempColor;
+
+                        tempColor = bufferCursor->green - bufferCursor->green * idx * 2 / doubleArea / 3;
+                        bufferCursor->green = tempColor >= 0x20 ? 0x1f : tempColor;
+                    }
+                    else
+                    {
+                        tempColor = bufferCursor->blue - bufferCursor->blue * idx / doubleArea / 2;
+                        bufferCursor->blue = tempColor >= 0x20 ? 0x1f : tempColor;
+
+                        tempColor = bufferCursor->green - bufferCursor->green * idx / doubleArea / 2;
+                        bufferCursor->green = tempColor >= 0x20 ? 0x1f : tempColor;
+                    }
+                }
+                else
+                {
+                    if (bufferCursor->red >= bufferCursor->blue)
+                    {
+                        tempColor = bufferCursor->red - bufferCursor->red * idx / doubleArea / 4;
+                        bufferCursor->red = tempColor >= 0x20 ? 0x1f : tempColor;
+
+                        tempColor = bufferCursor->green - bufferCursor->green * idx / doubleArea / 4;
+                        bufferCursor->green = tempColor >= 0x20 ? 0x1f : tempColor;
+                    }
+                    else
+                    {
+                        tempColor = bufferCursor->blue - bufferCursor->blue * idx / doubleArea / 4;
+                        bufferCursor->blue = tempColor >= 0x20 ? 0x1f : tempColor;
+
+                        tempColor = bufferCursor->green - bufferCursor->green * idx / doubleArea / 4;
+                        bufferCursor->green = tempColor >= 0x20 ? 0x1f : tempColor;
+                    }
+                }
+            }
+            else
+            {
+                bufferCursor->red = 0;
+                bufferCursor->green = 0;
+                bufferCursor->blue = 0;
+            }
+        }
+        break;
+    case D3DFMT_A4R4G4B4:
+        for (idx = 1; idx < doubleArea; idx = idx + 2)
+        {
+            bufferRegion[idx] = bufferRegion[idx] ^ 0xf0;
+        }
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
 #pragma optimize("", on)
 }; // namespace th08
