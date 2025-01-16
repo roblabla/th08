@@ -239,5 +239,10 @@ bool TextHelper::InvertAlpha(i32 x, i32 y, i32 spriteWidth, i32 fontHeight, BOOL
     }
     return true;
 }
+
+u8 *TextHelper::GetBuffer()
+{
+    return m_buffer;
+}
 #pragma optimize("", on)
 }; // namespace th08
