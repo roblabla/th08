@@ -264,5 +264,10 @@ i32 TextHelper::GetWidth()
 {
     return m_width;
 }
+
+D3DFORMAT TextHelper::GetFormat()
+{
+    return m_format;
+}
 #pragma optimize("", on)
 }; // namespace th08
