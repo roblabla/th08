@@ -1,5 +1,6 @@
 #include "TextHelper.hpp"
 #include "Supervisor.hpp"
+#include "dxutil.hpp"
 #include "i18n.hpp"
 
 namespace th08
@@ -326,6 +327,11 @@ bool TextHelper::CopyTextToSurface(IDirect3DSurface8 *outSurface)
 void TextHelper::CreateTextBuffer()
 {
     g_Supervisor.d3dDevice->CreateImageSurface(1024, TEXT_BUFFER_HEIGHT, D3DFMT_A1R5G5B5, &g_TextBufferSurface);
+}
+
+void TextHelper::ReleaseTextBuffer()
+{
+    SAFE_RELEASE(g_TextBufferSurface);
 }
 #pragma optimize("", on)
 }; // namespace th08
