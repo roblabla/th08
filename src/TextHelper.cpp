@@ -269,5 +269,10 @@ D3DFORMAT TextHelper::GetFormat()
 {
     return m_format;
 }
+
+bool TextHelper::IsAllocated()
+{
+    return m_gdiObj2 != 0;
+}
 #pragma optimize("", on)
 }; // namespace th08
