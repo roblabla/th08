@@ -259,5 +259,10 @@ HDC TextHelper::GetHDC()
 {
     return m_hdc;
 }
+
+i32 TextHelper::GetWidth()
+{
+    return m_width;
+}
 #pragma optimize("", on)
 }; // namespace th08
