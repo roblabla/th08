@@ -249,5 +249,10 @@ u32 TextHelper::GetImageWidthInBytes()
 {
     return m_imageWidthInBytes;
 }
+
+i32 TextHelper::GetHeight()
+{
+    return m_height;
+}
 #pragma optimize("", on)
 }; // namespace th08
