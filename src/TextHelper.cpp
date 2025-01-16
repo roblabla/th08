@@ -4,6 +4,8 @@
 
 namespace th08
 {
+DIFFABLE_STATIC(IDirect3DSurface8 *, g_TextBufferSurface)
+
 DIFFABLE_STATIC_ARRAY_ASSIGN(FormatInfo, 7, g_FormatInfoArray) = {
     {D3DFMT_X8R8G8B8, 32, 0x00000000, 0x00FF0000, 0x0000FF00, 0x000000FF},
     {D3DFMT_A8R8G8B8, 32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF},
@@ -317,6 +319,13 @@ bool TextHelper::CopyTextToSurface(IDirect3DSurface8 *outSurface)
     }
     outSurface->UnlockRect();
     return true;
+}
+
+#define TEXT_BUFFER_HEIGHT 64
+
+void TextHelper::CreateTextBuffer()
+{
+    g_Supervisor.d3dDevice->CreateImageSurface(1024, TEXT_BUFFER_HEIGHT, D3DFMT_A1R5G5B5, &g_TextBufferSurface);
 }
 #pragma optimize("", on)
 }; // namespace th08

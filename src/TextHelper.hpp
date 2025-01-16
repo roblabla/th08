@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ZunColor.hpp"
+#include "diffbuild.hpp"
 #include "inttypes.hpp"
 
 #include <d3d8.h>
@@ -57,4 +58,6 @@ class TextHelper
     HGDIOBJ m_gdiObj2;
     u8 *m_buffer;
 };
-}; // namespace th06
+
+DIFFABLE_EXTERN(IDirect3DSurface8 *, g_TextBufferSurface)
+}; // namespace th08
