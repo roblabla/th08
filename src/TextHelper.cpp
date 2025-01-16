@@ -15,5 +15,10 @@ TextHelper::TextHelper()
     m_gdiObj = 0;
     m_buffer = NULL;
 }
+
+TextHelper::~TextHelper()
+{
+    ReleaseBuffer();
+}
 #pragma optimize("", on)
 }; // namespace th08
