@@ -272,7 +272,51 @@ D3DFORMAT TextHelper::GetFormat()
 
 bool TextHelper::IsAllocated()
 {
-    return m_gdiObj2 != 0;
+    return m_gdiObj2 != NULL;
+}
+
+#pragma function(memcpy)
+#pragma var_order(dstBuf, dstWidthBytes, rectToLock, curHeight, srcWidthBytes, outSurfaceDesc, srcBuf, lockedRect,     \
+                  width, height, thisFormat, thisHeight)
+bool TextHelper::CopyTextToSurface(IDirect3DSurface8 *outSurface)
+{
+    D3DLOCKED_RECT lockedRect;
+    u8 *srcBuf;
+    D3DSURFACE_DESC outSurfaceDesc;
+    size_t srcWidthBytes;
+    int curHeight;
+    RECT rectToLock;
+    int dstWidthBytes;
+    u8 *dstBuf;
+
+    if (!IsAllocated())
+    {
+        return false;
+    }
+    outSurface->GetDesc(&outSurfaceDesc);
+    rectToLock.left = 0;
+    rectToLock.top = 0;
+    rectToLock.right = GetWidth();
+    rectToLock.bottom = GetHeight();
+    if (outSurface->LockRect(&lockedRect, &rectToLock, 0))
+    {
+        return false;
+    }
+    dstWidthBytes = lockedRect.Pitch;
+    srcWidthBytes = GetImageWidthInBytes();
+    srcBuf = GetBuffer();
+    dstBuf = (u8 *)lockedRect.pBits;
+    if (outSurfaceDesc.Format == GetFormat())
+    {
+        for (curHeight = 0; curHeight < GetHeight(); curHeight++)
+        {
+            memcpy(dstBuf, srcBuf, srcWidthBytes);
+            srcBuf += srcWidthBytes;
+            dstBuf += dstWidthBytes;
+        }
+    }
+    outSurface->UnlockRect();
+    return true;
 }
 #pragma optimize("", on)
 }; // namespace th08
