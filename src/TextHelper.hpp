@@ -29,7 +29,7 @@ class TextHelper
     FormatInfo *GetFormatInfo(D3DFORMAT format);
     bool InvertAlpha(i32 x, i32 y, i32 spriteWidth, i32 fontHeight, BOOL param_5);
     u8 *GetBuffer();
-    u32 GetImageSizeInBytes();
+    u32 GetImageWidthInBytes();
     i32 GetHeight();
     HDC GetHDC();
     i32 GetWidth();

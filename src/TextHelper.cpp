@@ -244,5 +244,10 @@ u8 *TextHelper::GetBuffer()
 {
     return m_buffer;
 }
+
+u32 TextHelper::GetImageWidthInBytes()
+{
+    return m_imageWidthInBytes;
+}
 #pragma optimize("", on)
 }; // namespace th08
