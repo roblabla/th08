@@ -254,5 +254,10 @@ i32 TextHelper::GetHeight()
 {
     return m_height;
 }
+
+HDC TextHelper::GetHDC()
+{
+    return m_hdc;
+}
 #pragma optimize("", on)
 }; // namespace th08
