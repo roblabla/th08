@@ -96,6 +96,7 @@ def configure(build_type):
             "main",
             "Midi",
             "Supervisor",
+            "zwave",
         ]
 
         pbg_sources = [
