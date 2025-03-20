@@ -1068,7 +1068,8 @@ th08::CStreamingSound::HandleWaveStreamNotification,0x472d30,0x3e8,__thiscall,,i
 th08::CStreamingSound::Reset,0x473120,0xc2,__thiscall,,i32,CStreamingSound*
 th08::CWaveFile::CWaveFile,0x4731f0,0x38,__thiscall,,u32*,CWaveFile*
 th08::CWaveFile::~CWaveFile,0x473230,0x13,__thiscall,,void,CWaveFile*
-th08::CWaveFile::Open,0x473300,0x54,__thiscall,,u32,CWaveFile*,ZunWaveFormat*
+th08::CWaveFile::Open,0x473250,0xa3,unknown,,u8,u32,u32,u32
+th08::CWaveFile::Reopen,0x473300,0x54,__thiscall,,u32,CWaveFile*,ThBgmFormat*
 th08::CWaveFile::OpenFromMemory,0x473360,0x5c,__thiscall,,long,CWaveFile*,uchar*,unsigned long,tWAVEFORMATEX*,unsigned long
 th08::CWaveFile::GetSize,0x4733c0,0x11,__thiscall,,u32,CWaveFile*
 th08::CWaveFile::ResetFile,0x4733e0,0x148,__thiscall,,u32,CWaveFile*,bool

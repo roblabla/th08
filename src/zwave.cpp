@@ -9,7 +9,9 @@
 //-----------------------------------------------------------------------------
 #define STRICT
 #include "zwave.hpp"
+#include "SoundPlayer.hpp"
 #include "dxutil.hpp"
+#include "utils.hpp"
 #include <dsound.h>
 #include <dxerr8.h>
 #include <mmsystem.h>
@@ -110,6 +112,7 @@ HRESULT CSoundManager::SetPrimaryBufferFormat(DWORD dwPrimaryChannels, DWORD dwP
 // Name: CSoundManager::Get3DListenerInterface()
 // Desc: Returns the 3D listener interface associated with primary buffer.
 //-----------------------------------------------------------------------------
+#if 0
 HRESULT CSoundManager::Get3DListenerInterface(LPDIRECTSOUND3DLISTENER *ppDSListener)
 {
     HRESULT hr;
@@ -141,11 +144,13 @@ HRESULT CSoundManager::Get3DListenerInterface(LPDIRECTSOUND3DLISTENER *ppDSListe
 
     return S_OK;
 }
+#endif // 0
 
 //-----------------------------------------------------------------------------
 // Name: CSoundManager::Create()
 // Desc:
 //-----------------------------------------------------------------------------
+#if 0
 HRESULT CSoundManager::Create(CSound **ppSound, LPTSTR strWaveFileName, DWORD dwCreationFlags, GUID guid3DAlgorithm,
                               DWORD dwNumBuffers)
 {
@@ -196,7 +201,7 @@ HRESULT CSoundManager::Create(CSound **ppSound, LPTSTR strWaveFileName, DWORD dw
     dsbd.dwFlags = dwCreationFlags;
     dsbd.dwBufferBytes = dwDSBufferSize;
     dsbd.guid3DAlgorithm = guid3DAlgorithm;
-    dsbd.lpwfxFormat = pWaveFile->m_pwfx;
+    dsbd.lpwfxFormat = &pWaveFile->m_pzwf->format;
 
     // DirectSound is only guarenteed to play PCM data.  Other
     // formats may or may not work depending the sound card driver.
@@ -239,12 +244,14 @@ LFail:
     SAFE_DELETE(apDSBuffer);
     return hr;
 }
+#endif // 0
 
 //-----------------------------------------------------------------------------
 // Name: CSoundManager::CreateFromMemory()
 // Desc:
 //-----------------------------------------------------------------------------
-HRESULT CSoundManager::CreateFromMemory(CSound **ppSound, BYTE *pbData, ULONG ulDataSize, LPWAVEFORMATEX pwfx,
+#if 0
+HRESULT CSoundManager::CreateFromMemory(CSound **ppSound, BYTE *pbData, ULONG ulDataSize, ThBgmFormat *pzwf,
                                         DWORD dwCreationFlags, GUID guid3DAlgorithm, DWORD dwNumBuffers)
 {
     HRESULT hr;
@@ -272,7 +279,7 @@ HRESULT CSoundManager::CreateFromMemory(CSound **ppSound, BYTE *pbData, ULONG ul
         goto LFail;
     }
 
-    pWaveFile->OpenFromMemory(pbData, ulDataSize, pwfx, WAVEFILE_READ);
+    pWaveFile->OpenFromMemory(pbData, ulDataSize, pzwf, WAVEFILE_READ);
 
     // Make the DirectSound buffer the same size as the wav file
     dwDSBufferSize = ulDataSize;
@@ -286,7 +293,7 @@ HRESULT CSoundManager::CreateFromMemory(CSound **ppSound, BYTE *pbData, ULONG ul
     dsbd.dwFlags = dwCreationFlags;
     dsbd.dwBufferBytes = dwDSBufferSize;
     dsbd.guid3DAlgorithm = guid3DAlgorithm;
-    dsbd.lpwfxFormat = pwfx;
+    dsbd.lpwfxFormat = &pzwf->format;
 
     if (FAILED(hr = m_pDS->CreateSoundBuffer(&dsbd, &apDSBuffer[0], NULL)))
     {
@@ -315,6 +322,7 @@ LFail:
     SAFE_DELETE(apDSBuffer);
     return hr;
 }
+#endif
 
 //-----------------------------------------------------------------------------
 // Name: CSoundManager::CreateStreaming()
@@ -322,26 +330,28 @@ LFail:
 //-----------------------------------------------------------------------------
 HRESULT CSoundManager::CreateStreaming(CStreamingSound **ppStreamingSound, LPTSTR strWaveFileName,
                                        DWORD dwCreationFlags, GUID guid3DAlgorithm, DWORD dwNotifyCount,
-                                       DWORD dwNotifySize, HANDLE hNotifyEvent)
+                                       DWORD dwNotifySize, HANDLE hNotifyEvent, ThBgmFormat *pzwf)
 {
     HRESULT hr;
 
     if (m_pDS == NULL)
         return CO_E_NOTINITIALIZED;
-    if (strWaveFileName == NULL || ppStreamingSound == NULL || hNotifyEvent == NULL)
-        return E_INVALIDARG;
 
     LPDIRECTSOUNDBUFFER pDSBuffer = NULL;
-    DWORD dwDSBufferSize = NULL;
     CWaveFile *pWaveFile = NULL;
     DSBPOSITIONNOTIFY *aPosNotify = NULL;
     LPDIRECTSOUNDNOTIFY pDSNotify = NULL;
 
     pWaveFile = new CWaveFile();
-    pWaveFile->Open(strWaveFileName, NULL, WAVEFILE_READ);
+
+    if (pWaveFile->Open(strWaveFileName, pzwf, WAVEFILE_READ) != S_OK)
+    {
+        delete pWaveFile;
+        return E_FAIL;
+    }
 
     // Figure out how big the DSound buffer should be
-    dwDSBufferSize = dwNotifySize * dwNotifyCount;
+    DWORD dwDSBufferSize = dwNotifySize * dwNotifyCount;
 
     // Set up the direct sound buffer.  Request the NOTIFY flag, so
     // that we are notified as the sound buffer plays.  Note, that using this flag
@@ -349,28 +359,19 @@ HRESULT CSoundManager::CreateStreaming(CStreamingSound **ppStreamingSound, LPTST
     DSBUFFERDESC dsbd;
     ZeroMemory(&dsbd, sizeof(DSBUFFERDESC));
     dsbd.dwSize = sizeof(DSBUFFERDESC);
-    dsbd.dwFlags = dwCreationFlags | DSBCAPS_CTRLPOSITIONNOTIFY | DSBCAPS_GETCURRENTPOSITION2;
+    dsbd.dwFlags = dwCreationFlags | DSBCAPS_CTRLPOSITIONNOTIFY | DSBCAPS_GLOBALFOCUS | DSBCAPS_GETCURRENTPOSITION2 |
+                   DSBCAPS_CTRLVOLUME | DSBCAPS_LOCSOFTWARE;
     dsbd.dwBufferBytes = dwDSBufferSize;
     dsbd.guid3DAlgorithm = guid3DAlgorithm;
-    dsbd.lpwfxFormat = pWaveFile->m_pwfx;
+    dsbd.lpwfxFormat = &pWaveFile->m_pzwf->format;
 
     if (FAILED(hr = m_pDS->CreateSoundBuffer(&dsbd, &pDSBuffer, NULL)))
-    {
-        // If wave format isn't then it will return
-        // either DSERR_BADFORMAT or E_INVALIDARG
-        if (hr == DSERR_BADFORMAT || hr == E_INVALIDARG)
-            return DXTRACE_ERR_NOMSGBOX(TEXT("CreateSoundBuffer"), hr);
-
-        return DXTRACE_ERR(TEXT("CreateSoundBuffer"), hr);
-    }
+        return DXTRACE_ERR(TEXT("CreateSoundBuffer"), E_FAIL);
 
     // Create the notification events, so that we know when to fill
     // the buffer as the sound plays.
     if (FAILED(hr = pDSBuffer->QueryInterface(IID_IDirectSoundNotify, (VOID **)&pDSNotify)))
-    {
-        SAFE_DELETE(aPosNotify);
-        return DXTRACE_ERR(TEXT("QueryInterface"), hr);
-    }
+        return DXTRACE_ERR(TEXT("QueryInterface"), E_FAIL);
 
     aPosNotify = new DSBPOSITIONNOTIFY[dwNotifyCount];
     if (aPosNotify == NULL)
@@ -388,7 +389,7 @@ HRESULT CSoundManager::CreateStreaming(CStreamingSound **ppStreamingSound, LPTST
     {
         SAFE_RELEASE(pDSNotify);
         SAFE_DELETE(aPosNotify);
-        return DXTRACE_ERR(TEXT("SetNotificationPositions"), hr);
+        return DXTRACE_ERR(TEXT("SetNotificationPositions"), E_FAIL);
     }
 
     SAFE_RELEASE(pDSNotify);
@@ -396,6 +397,92 @@ HRESULT CSoundManager::CreateStreaming(CStreamingSound **ppStreamingSound, LPTST
 
     // Create the sound
     *ppStreamingSound = new CStreamingSound(pDSBuffer, dwDSBufferSize, pWaveFile, dwNotifySize);
+
+    CopyMemory(&(*ppStreamingSound)->m_dsbd, &dsbd, sizeof(DSBUFFERDESC));
+    (*ppStreamingSound)->m_pSoundManager = this;
+    (*ppStreamingSound)->m_hNotifyEvent = hNotifyEvent;
+    (*ppStreamingSound)->m_bIsLocked = FALSE;
+
+    return S_OK;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CSoundManager::CreateStreamingFromMemory()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CSoundManager::CreateStreamingFromMemory(CStreamingSound **ppStreamingSound, BYTE *pbData, ULONG ulDataSize,
+                                                 ThBgmFormat *pzwf, DWORD dwCreationFlags, GUID guid3DAlgorithm,
+                                                 DWORD dwNotifyCount, DWORD dwNotifySize, HANDLE hNotifyEvent)
+{
+    HRESULT hr;
+
+    utils::DebugPrint("StreamingSound Create \r\n");
+
+    if (m_pDS == NULL)
+        return CO_E_NOTINITIALIZED;
+
+    LPDIRECTSOUNDBUFFER pDSBuffer = NULL;
+    CWaveFile *pWaveFile = NULL;
+    DSBPOSITIONNOTIFY *aPosNotify = NULL;
+    LPDIRECTSOUNDNOTIFY pDSNotify = NULL;
+
+    pWaveFile = new CWaveFile();
+    pWaveFile->OpenFromMemory(pbData, ulDataSize, pzwf, 0);
+
+    // Figure out how big the DSound buffer should be
+    DWORD dwDSBufferSize = dwNotifySize * dwNotifyCount;
+
+    // Set up the direct sound buffer.  Request the NOTIFY flag, so
+    // that we are notified as the sound buffer plays.  Note, that using this flag
+    // may limit the amount of hardware acceleration that can occur.
+    DSBUFFERDESC dsbd;
+    ZeroMemory(&dsbd, sizeof(DSBUFFERDESC));
+    dsbd.dwSize = sizeof(DSBUFFERDESC);
+    dsbd.dwFlags = dwCreationFlags | DSBCAPS_CTRLPOSITIONNOTIFY | DSBCAPS_GLOBALFOCUS | DSBCAPS_GETCURRENTPOSITION2 |
+                   DSBCAPS_CTRLVOLUME | DSBCAPS_LOCSOFTWARE;
+    dsbd.dwBufferBytes = dwDSBufferSize;
+    dsbd.guid3DAlgorithm = guid3DAlgorithm;
+    dsbd.lpwfxFormat = &pWaveFile->m_pzwf->format;
+
+    if (FAILED(hr = m_pDS->CreateSoundBuffer(&dsbd, &pDSBuffer, NULL)))
+        return DXTRACE_ERR(TEXT("CreateSoundBuffer"), E_FAIL);
+
+    // Create the notification events, so that we know when to fill
+    // the buffer as the sound plays.
+    if (FAILED(hr = pDSBuffer->QueryInterface(IID_IDirectSoundNotify, (VOID **)&pDSNotify)))
+        return DXTRACE_ERR(TEXT("QueryInterface"), E_FAIL);
+
+    aPosNotify = new DSBPOSITIONNOTIFY[dwNotifyCount];
+    if (aPosNotify == NULL)
+        return E_OUTOFMEMORY;
+
+    for (DWORD i = 0; i < dwNotifyCount; i++)
+    {
+        aPosNotify[i].dwOffset = (dwNotifySize * i) + dwNotifySize - 1;
+        aPosNotify[i].hEventNotify = hNotifyEvent;
+    }
+
+    // Tell DirectSound when to notify us. The notification will come in the from
+    // of signaled events that are handled in WinMain()
+    if (FAILED(hr = pDSNotify->SetNotificationPositions(dwNotifyCount, aPosNotify)))
+    {
+        SAFE_RELEASE(pDSNotify);
+        SAFE_DELETE(aPosNotify);
+        return DXTRACE_ERR(TEXT("SetNotificationPositions"), E_FAIL);
+    }
+
+    SAFE_RELEASE(pDSNotify);
+    SAFE_DELETE(aPosNotify);
+
+    // Create the sound
+    *ppStreamingSound = new CStreamingSound(pDSBuffer, dwDSBufferSize, pWaveFile, dwNotifySize);
+
+    CopyMemory(&(*ppStreamingSound)->m_dsbd, &dsbd, sizeof(DSBUFFERDESC));
+    (*ppStreamingSound)->m_pSoundManager = this;
+    (*ppStreamingSound)->m_hNotifyEvent = hNotifyEvent;
+    (*ppStreamingSound)->m_bIsLocked = FALSE;
+
+    utils::DebugPrint("Success \r\n");
 
     return S_OK;
 }
@@ -423,6 +510,58 @@ CSound::CSound(LPDIRECTSOUNDBUFFER *apDSBuffer, DWORD dwDSBufferSize, DWORD dwNu
         m_apDSBuffer[i]->SetCurrentPosition(0);
 
     m_bIsPlaying = FALSE;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CStreamingSound::InitSoundBuffer()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CStreamingSound::InitSoundBuffers()
+{
+    DWORD i;
+
+    m_bIsPlaying = FALSE;
+
+    for (i = 0; i < m_dwNumBuffers; i++)
+        SAFE_RELEASE(m_apDSBuffer[i]);
+
+    SAFE_DELETE(m_apDSBuffer);
+
+    DSBPOSITIONNOTIFY *aPosNotify = NULL;
+    LPDIRECTSOUNDNOTIFY pDSNotify = NULL;
+
+    m_apDSBuffer = new LPDIRECTSOUNDBUFFER[m_dwNumBuffers];
+
+    for (i = 0; i < m_dwNumBuffers; i++)
+    {
+        if (FAILED(m_pSoundManager->m_pDS->CreateSoundBuffer(&m_dsbd, &m_apDSBuffer[i], NULL)))
+            return DXTRACE_ERR(TEXT("CreateSoundBuffer"), E_FAIL);
+
+        if (FAILED(m_apDSBuffer[i]->QueryInterface(IID_IDirectSoundNotify, (VOID **)&pDSNotify)))
+            return DXTRACE_ERR(TEXT("QueryInterface"), E_FAIL);
+
+        aPosNotify = new DSBPOSITIONNOTIFY[16];
+        if (aPosNotify == NULL)
+            return E_OUTOFMEMORY;
+
+        for (DWORD j = 0; j < 16; j++)
+        {
+            aPosNotify[j].dwOffset = (m_dwNotifySize * j) + m_dwNotifySize - 1;
+            aPosNotify[j].hEventNotify = m_hNotifyEvent;
+        }
+
+        if (FAILED(pDSNotify->SetNotificationPositions(16, aPosNotify)))
+        {
+            SAFE_RELEASE(pDSNotify);
+            SAFE_DELETE(aPosNotify);
+            return DXTRACE_ERR(TEXT("SetNotificationPositions"), E_FAIL);
+        }
+
+        SAFE_RELEASE(pDSNotify);
+        SAFE_DELETE(aPosNotify);
+    }
+
+    return S_OK;
 }
 
 //-----------------------------------------------------------------------------
@@ -464,7 +603,7 @@ HRESULT CSound::FillBufferWithSound(LPDIRECTSOUNDBUFFER pDSB, BOOL bRepeatWavIfB
         return DXTRACE_ERR(TEXT("Lock"), hr);
 
     // Reset the wave file to the beginning
-    m_pWaveFile->ResetFile();
+    m_pWaveFile->ResetFile(false);
 
     if (FAILED(hr = m_pWaveFile->Read((BYTE *)pDSLockedBuffer, dwDSLockedBufferSize, &dwWavDataRead)))
         return DXTRACE_ERR(TEXT("Read"), hr);
@@ -473,7 +612,7 @@ HRESULT CSound::FillBufferWithSound(LPDIRECTSOUNDBUFFER pDSB, BOOL bRepeatWavIfB
     {
         // Wav is blank, so just fill with silence
         FillMemory((BYTE *)pDSLockedBuffer, dwDSLockedBufferSize,
-                   (BYTE)(m_pWaveFile->m_pwfx->wBitsPerSample == 8 ? 128 : 0));
+                   (BYTE)(m_pWaveFile->m_pzwf->format.wBitsPerSample == 8 ? 128 : 0));
     }
     else if (dwWavDataRead < dwDSLockedBufferSize)
     {
@@ -487,7 +626,7 @@ HRESULT CSound::FillBufferWithSound(LPDIRECTSOUNDBUFFER pDSB, BOOL bRepeatWavIfB
             {
                 // This will keep reading in until the buffer is full
                 // for very short files
-                if (FAILED(hr = m_pWaveFile->ResetFile()))
+                if (FAILED(hr = m_pWaveFile->ResetFile(false)))
                     return DXTRACE_ERR(TEXT("ResetFile"), hr);
 
                 hr = m_pWaveFile->Read((BYTE *)pDSLockedBuffer + dwReadSoFar, dwDSLockedBufferSize - dwReadSoFar,
@@ -502,7 +641,7 @@ HRESULT CSound::FillBufferWithSound(LPDIRECTSOUNDBUFFER pDSB, BOOL bRepeatWavIfB
         {
             // Don't repeat the wav file, just fill in silence
             FillMemory((BYTE *)pDSLockedBuffer + dwWavDataRead, dwDSLockedBufferSize - dwWavDataRead,
-                       (BYTE)(m_pWaveFile->m_pwfx->wBitsPerSample == 8 ? 128 : 0));
+                       (BYTE)(m_pWaveFile->m_pzwf->format.wBitsPerSample == 8 ? 128 : 0));
         }
     }
 
@@ -600,6 +739,7 @@ LPDIRECTSOUNDBUFFER CSound::GetBuffer(DWORD dwIndex)
 // Name: CSound::Get3DBufferInterface()
 // Desc:
 //-----------------------------------------------------------------------------
+#if 0
 HRESULT CSound::Get3DBufferInterface(DWORD dwIndex, LPDIRECTSOUND3DBUFFER *ppDS3DBuffer)
 {
     if (m_apDSBuffer == NULL)
@@ -611,6 +751,7 @@ HRESULT CSound::Get3DBufferInterface(DWORD dwIndex, LPDIRECTSOUND3DBUFFER *ppDS3
 
     return m_apDSBuffer[dwIndex]->QueryInterface(IID_IDirectSound3DBuffer, (VOID **)ppDS3DBuffer);
 }
+#endif
 
 //-----------------------------------------------------------------------------
 // Name: CSound::Play()
@@ -644,7 +785,37 @@ HRESULT CSound::Play(DWORD dwPriority, DWORD dwFlags)
         Reset();
     }
 
+    m_iFadeType = 0;
+    m_iCurFadeProgress = 0;
+    m_iTotalFade = 0;
+    SetVolume(0);
+    m_bIsPlaying = TRUE;
+    m_dwPriority = dwPriority;
+    m_dwFlags = dwFlags;
+    m_unk2c = 0;
+
     return pDSB->Play(0, dwPriority, dwFlags);
+}
+
+//-----------------------------------------------------------------------------
+// Name: CSound::SetVolume()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CSound::SetVolume(i32 iVolume)
+{
+    f32 volumeF = g_SoundPlayer.bgmVolume / 100.0f;
+
+    if (g_SoundPlayer.bgmVolume != 0)
+    {
+        volumeF = 1.0f - volumeF;
+        volumeF = volumeF * volumeF;
+        volumeF = 1.0f - volumeF;
+        return m_apDSBuffer[0]->SetVolume((i32)((iVolume + 5000) * volumeF) - 5000);
+    }
+    else
+    {
+        return m_apDSBuffer[0]->SetVolume(DSBVOLUME_MIN);
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -658,10 +829,50 @@ HRESULT CSound::Stop()
 
     HRESULT hr = 0;
 
+    m_bIsPlaying = FALSE;
+
     for (DWORD i = 0; i < m_dwNumBuffers; i++)
+    {
         hr |= m_apDSBuffer[i]->Stop();
+        hr |= m_apDSBuffer[i]->SetCurrentPosition(0);
+    }
+
+    m_iFadeType = 0;
 
     return hr;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CSound::Pause()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CSound::Pause()
+{
+    if (m_apDSBuffer == NULL)
+        return CO_E_NOTINITIALIZED;
+
+    HRESULT hr = 0;
+
+    m_bIsPlaying = FALSE;
+    hr |= m_apDSBuffer[0]->Stop();
+
+    return hr;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CSound::Unpause()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CSound::Unpause()
+{
+    if (m_apDSBuffer == NULL)
+        return CO_E_NOTINITIALIZED;
+
+    LPDIRECTSOUNDBUFFER pDSB = m_apDSBuffer[0];
+
+    m_bIsPlaying = TRUE;
+
+    return pDSB->Play(0, m_dwPriority, m_dwFlags);
 }
 
 //-----------------------------------------------------------------------------
@@ -685,6 +896,7 @@ HRESULT CSound::Reset()
 // Name: CSound::IsSoundPlaying()
 // Desc: Checks to see if a buffer is playing and returns TRUE if it is.
 //-----------------------------------------------------------------------------
+#if 0
 BOOL CSound::IsSoundPlaying()
 {
     BOOL bIsPlaying = FALSE;
@@ -704,6 +916,7 @@ BOOL CSound::IsSoundPlaying()
 
     return bIsPlaying;
 }
+#endif
 
 //-----------------------------------------------------------------------------
 // Name: CStreamingSound::CStreamingSound()
@@ -733,41 +946,150 @@ CStreamingSound::~CStreamingSound()
 }
 
 //-----------------------------------------------------------------------------
+// Name: CStreamingSound::UpdateFadeOut()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CStreamingSound::UpdateFadeOut()
+{
+    if (m_iFadeType == 1)
+    {
+        if (--m_iCurFadeProgress <= 0)
+        {
+            m_iFadeType = 0;
+            m_apDSBuffer[0]->Stop();
+            return S_FALSE;
+        }
+
+        i32 newVolume = m_iCurFadeProgress * 5000 / m_iTotalFade - 5000;
+        HRESULT hr = SetVolume(newVolume);
+    }
+
+    return S_OK;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CStreamingSound::UpdateFadeIn()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CStreamingSound::UpdateFadeIn()
+{
+    if (m_iFadeType == 2)
+    {
+        if (--m_iCurFadeProgress <= 0)
+        {
+            m_iFadeType = 0;
+            return S_FALSE;
+        }
+
+        i32 newVolume = 0 - m_iCurFadeProgress * 5000 / m_iTotalFade;
+        HRESULT hr = SetVolume(newVolume);
+    }
+
+    return S_OK;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CStreamingSound::UpdateShortFadeIn()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CStreamingSound::UpdateShortFadeIn()
+{
+    if (m_iFadeType == 3)
+    {
+        if (--m_iCurFadeProgress <= 0)
+        {
+            m_iFadeType = 0;
+            return S_FALSE;
+        }
+
+        i32 newVolume = 0 - m_iCurFadeProgress * 1000 / m_iTotalFade;
+        HRESULT hr = SetVolume(newVolume);
+    }
+
+    return S_OK;
+}
+
+//-----------------------------------------------------------------------------
+// Name: CStreamingSound::UpdateShortFadeOut()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CStreamingSound::UpdateShortFadeOut()
+{
+    if (m_iFadeType == 4)
+    {
+        if (--m_iCurFadeProgress <= 0)
+        {
+            m_iFadeType = 0;
+            return S_FALSE;
+        }
+
+        i32 newVolume = m_iCurFadeProgress * 1000 / m_iTotalFade - 1000;
+        HRESULT hr = SetVolume(newVolume);
+    }
+
+    return S_OK;
+}
+
+//-----------------------------------------------------------------------------
 // Name: CStreamingSound::HandleWaveStreamNotification()
 // Desc: Handle the notification that tell us to put more wav data in the
 //       circular buffer
 //-----------------------------------------------------------------------------
+#pragma var_order(dwDSLockedBufferSize2, pDSLockedBuffer, dwBytesWrittenToBuffer, local_14, pDSLockedBuffer2,          \
+                  bRestored, dwPlayDelta, hr, dwDSLockedBufferSize, dwCurrentPlayPos, local_30, dwReadSoFar)
 HRESULT CStreamingSound::HandleWaveStreamNotification(BOOL bLoopedPlay)
 {
     HRESULT hr;
     DWORD dwCurrentPlayPos;
     DWORD dwPlayDelta;
     DWORD dwBytesWrittenToBuffer;
-    VOID *pDSLockedBuffer = NULL;
-    VOID *pDSLockedBuffer2 = NULL;
+    VOID *pDSLockedBuffer;
+    VOID *pDSLockedBuffer2;
     DWORD dwDSLockedBufferSize;
     DWORD dwDSLockedBufferSize2;
+    DWORD local_14;
+    DWORD local_30;
 
     if (m_apDSBuffer == NULL || m_pWaveFile == NULL)
         return CO_E_NOTINITIALIZED;
 
+    m_apDSBuffer[0]->GetCurrentPosition(&local_14, &local_30);
+
+    if ((m_dwNextWriteOffset >= local_30 - m_dwNotifySize && m_dwNextWriteOffset < local_30) ||
+        (local_30 - m_dwNotifySize < 0 && m_dwNextWriteOffset >= m_dwDSBufferSize - m_dwNotifySize))
+    {
+        utils::DebugPrint("Stream Skip\n");
+        return CO_E_FIRST;
+    }
+
     // Restore the buffer if it was lost
     BOOL bRestored;
     if (FAILED(hr = RestoreBuffer(m_apDSBuffer[0], &bRestored)))
+    {
+        utils::DebugPrint("error : RestoreBuffer in HandleWaveStreamNotification\r\n");
         return DXTRACE_ERR(TEXT("RestoreBuffer"), hr);
+    }
 
     if (bRestored)
     {
         // The buffer was restored, so we need to fill it with new data
         if (FAILED(hr = FillBufferWithSound(m_apDSBuffer[0], FALSE)))
+        {
+            utils::DebugPrint("error : FillBufferWithSound in HandleWaveStreamNotification\r\n");
             return DXTRACE_ERR(TEXT("FillBufferWithSound"), hr);
+        }
         return S_OK;
     }
 
     // Lock the DirectSound buffer
+    pDSLockedBuffer = NULL;
+    pDSLockedBuffer2 = NULL;
     if (FAILED(hr = m_apDSBuffer[0]->Lock(m_dwNextWriteOffset, m_dwNotifySize, &pDSLockedBuffer, &dwDSLockedBufferSize,
                                           &pDSLockedBuffer2, &dwDSLockedBufferSize2, 0L)))
+    {
+        utils::DebugPrint("error : Buffer->Lock in HandleWaveStreamNotification\r\n");
         return DXTRACE_ERR(TEXT("Lock"), hr);
+    }
 
     // m_dwDSBufferSize and m_dwNextWriteOffset are both multiples of m_dwNotifySize,
     // it should the second buffer should never be valid
@@ -778,12 +1100,16 @@ HRESULT CStreamingSound::HandleWaveStreamNotification(BOOL bLoopedPlay)
     {
         // Fill the DirectSound buffer with wav data
         if (FAILED(hr = m_pWaveFile->Read((BYTE *)pDSLockedBuffer, dwDSLockedBufferSize, &dwBytesWrittenToBuffer)))
+        {
+            utils::DebugPrint("error : m_pWaveFile->Read in HandleWaveStreamNotification\r\n");
             return DXTRACE_ERR(TEXT("Read"), hr);
+        }
     }
     else
     {
         // Fill the DirectSound buffer with silence
-        FillMemory(pDSLockedBuffer, dwDSLockedBufferSize, (BYTE)(m_pWaveFile->m_pwfx->wBitsPerSample == 8 ? 128 : 0));
+        FillMemory(pDSLockedBuffer, dwDSLockedBufferSize,
+                   (BYTE)(m_pWaveFile->m_pzwf->format.wBitsPerSample == 8 ? 128 : 0));
         dwBytesWrittenToBuffer = dwDSLockedBufferSize;
     }
 
@@ -795,7 +1121,7 @@ HRESULT CStreamingSound::HandleWaveStreamNotification(BOOL bLoopedPlay)
         {
             // Fill in silence for the rest of the buffer.
             FillMemory((BYTE *)pDSLockedBuffer + dwBytesWrittenToBuffer, dwDSLockedBufferSize - dwBytesWrittenToBuffer,
-                       (BYTE)(m_pWaveFile->m_pwfx->wBitsPerSample == 8 ? 128 : 0));
+                       (BYTE)(m_pWaveFile->m_pzwf->format.wBitsPerSample == 8 ? 128 : 0));
 
             // Any future notifications should just fill the buffer with silence
             m_bFillNextNotificationWithSilence = TRUE;
@@ -807,12 +1133,18 @@ HRESULT CStreamingSound::HandleWaveStreamNotification(BOOL bLoopedPlay)
             while (dwReadSoFar < dwDSLockedBufferSize)
             {
                 // This will keep reading in until the buffer is full (for very short files).
-                if (FAILED(hr = m_pWaveFile->ResetFile()))
+                if (FAILED(hr = m_pWaveFile->ResetFile(true)))
+                {
+                    utils::DebugPrint("error : m_pWaveFile->ResetFile in HandleWaveStreamNotification\r\n");
                     return DXTRACE_ERR(TEXT("ResetFile"), hr);
+                }
 
                 if (FAILED(hr = m_pWaveFile->Read((BYTE *)pDSLockedBuffer + dwReadSoFar,
                                                   dwDSLockedBufferSize - dwReadSoFar, &dwBytesWrittenToBuffer)))
+                {
+                    utils::DebugPrint("error : m_pWaveFile->Read(+) in HandleWaveStreamNotification\r\n");
                     return DXTRACE_ERR(TEXT("Read"), hr);
+                }
 
                 dwReadSoFar += dwBytesWrittenToBuffer;
             }
@@ -827,7 +1159,10 @@ HRESULT CStreamingSound::HandleWaveStreamNotification(BOOL bLoopedPlay)
     // buffer with silence or starting reading from the beginning of the file,
     // depending if the user wants to loop the sound
     if (FAILED(hr = m_apDSBuffer[0]->GetCurrentPosition(&dwCurrentPlayPos, NULL)))
+    {
+        utils::DebugPrint("error : m_apDSBuffer[0]->GetCurrentPosition in HandleWaveStreamNotification\r\n");
         return DXTRACE_ERR(TEXT("GetCurrentPosition"), hr);
+    }
 
     // Check to see if the position counter looped
     if (dwCurrentPlayPos < m_dwLastPlayPos)
@@ -884,7 +1219,7 @@ HRESULT CStreamingSound::Reset()
             return DXTRACE_ERR(TEXT("FillBufferWithSound"), hr);
     }
 
-    m_pWaveFile->ResetFile();
+    m_pWaveFile->ResetFile(false);
 
     return m_apDSBuffer[0]->SetCurrentPosition(0L);
 }
@@ -897,7 +1232,7 @@ HRESULT CStreamingSound::Reset()
 //-----------------------------------------------------------------------------
 CWaveFile::CWaveFile()
 {
-    m_pwfx = NULL;
+    m_pzwf = NULL;
     m_hmmio = NULL;
     m_dwSize = 0;
     m_bIsReadingFromMemory = FALSE;
@@ -910,19 +1245,14 @@ CWaveFile::CWaveFile()
 CWaveFile::~CWaveFile()
 {
     Close();
-
-    if (!m_bIsReadingFromMemory)
-        SAFE_DELETE_ARRAY(m_pwfx);
 }
 
 //-----------------------------------------------------------------------------
 // Name: CWaveFile::Open()
 // Desc: Opens a wave file for reading
 //-----------------------------------------------------------------------------
-HRESULT CWaveFile::Open(LPTSTR strFileName, WAVEFORMATEX *pwfx, DWORD dwFlags)
+HRESULT CWaveFile::Open(LPTSTR strFileName, ThBgmFormat *pzwf, DWORD dwFlags)
 {
-    HRESULT hr;
-
     m_dwFlags = dwFlags;
     m_bIsReadingFromMemory = FALSE;
 
@@ -930,84 +1260,47 @@ HRESULT CWaveFile::Open(LPTSTR strFileName, WAVEFORMATEX *pwfx, DWORD dwFlags)
     {
         if (strFileName == NULL)
             return E_INVALIDARG;
-        SAFE_DELETE_ARRAY(m_pwfx);
 
-        m_hmmio = mmioOpen(strFileName, NULL, MMIO_ALLOCBUF | MMIO_READ);
+        utils::DebugPrint("Streaming File Open %s\r\n", strFileName);
+        m_hWaveFile = CreateFileA(strFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 
-        if (NULL == m_hmmio)
-        {
-            HRSRC hResInfo;
-            HGLOBAL hResData;
-            DWORD dwSize;
-            VOID *pvRes;
+        if (m_hWaveFile == INVALID_HANDLE_VALUE)
+            return E_FAIL;
 
-            // Loading it as a file failed, so try it as a resource
-            if (NULL == (hResInfo = FindResource(NULL, strFileName, TEXT("WAVE"))))
-            {
-                if (NULL == (hResInfo = FindResource(NULL, strFileName, TEXT("WAV"))))
-                    return DXTRACE_ERR_NOMSGBOX(TEXT("FindResource"), E_FAIL);
-            }
-
-            if (NULL == (hResData = LoadResource(NULL, hResInfo)))
-                return DXTRACE_ERR(TEXT("LoadResource"), E_FAIL);
-
-            if (0 == (dwSize = SizeofResource(NULL, hResInfo)))
-                return DXTRACE_ERR(TEXT("SizeofResource"), E_FAIL);
-
-            if (NULL == (pvRes = LockResource(hResData)))
-                return DXTRACE_ERR(TEXT("LockResource"), E_FAIL);
-
-            CHAR *pData = new CHAR[dwSize];
-            memcpy(pData, pvRes, dwSize);
-
-            MMIOINFO mmioInfo;
-            ZeroMemory(&mmioInfo, sizeof(mmioInfo));
-            mmioInfo.fccIOProc = FOURCC_MEM;
-            mmioInfo.cchBuffer = dwSize;
-            mmioInfo.pchBuffer = (CHAR *)pData;
-
-            m_hmmio = mmioOpen(NULL, &mmioInfo, MMIO_ALLOCBUF | MMIO_READ);
-        }
-
-        if (FAILED(hr = ReadMMIO()))
-        {
-            // ReadMMIO will fail if its an not a wave file
-            mmioClose(m_hmmio, 0);
-            return DXTRACE_ERR_NOMSGBOX(TEXT("ReadMMIO"), hr);
-        }
-
-        if (FAILED(hr = ResetFile()))
-            return DXTRACE_ERR(TEXT("ResetFile"), hr);
-
-        // After the reset, the size of the wav file is m_ck.cksize so store it now
+        m_pzwf = pzwf;
+        ResetFile(false);
         m_dwSize = m_ck.cksize;
     }
-    else
-    {
-        m_hmmio = mmioOpen(strFileName, NULL, MMIO_ALLOCBUF | MMIO_READWRITE | MMIO_CREATE);
-        if (NULL == m_hmmio)
-            return DXTRACE_ERR(TEXT("mmioOpen"), E_FAIL);
 
-        if (FAILED(hr = WriteMMIO(pwfx)))
-        {
-            mmioClose(m_hmmio, 0);
-            return DXTRACE_ERR(TEXT("WriteMMIO"), hr);
-        }
+    return S_OK;
+}
 
-        if (FAILED(hr = ResetFile()))
-            return DXTRACE_ERR(TEXT("ResetFile"), hr);
-    }
+//-----------------------------------------------------------------------------
+// Name: CWaveFile::Reopen()
+// Desc:
+//-----------------------------------------------------------------------------
+HRESULT CWaveFile::Reopen(ThBgmFormat *pzwf)
+{
+    if (m_bIsReadingFromMemory)
+        return E_FAIL;
 
-    return hr;
+    if (m_hWaveFile == INVALID_HANDLE_VALUE)
+        return E_FAIL;
+
+    m_pzwf = pzwf;
+    ResetFile(false);
+    m_dwSize = m_ck.cksize;
+    return S_OK;
 }
 
 //-----------------------------------------------------------------------------
 // Name: CWaveFile::OpenFromMemory()
 // Desc: copy data to CWaveFile member variable from memory
 //-----------------------------------------------------------------------------
-HRESULT CWaveFile::OpenFromMemory(BYTE *pbData, ULONG ulDataSize, WAVEFORMATEX *pwfx, DWORD dwFlags)
+HRESULT CWaveFile::OpenFromMemory(BYTE *pbData, ULONG ulDataSize, ThBgmFormat *pzwf, DWORD dwFlags)
 {
-    m_pwfx = pwfx;
+    m_pzwf = pzwf;
     m_ulDataSize = ulDataSize;
     m_pbData = pbData;
     m_pbDataCur = m_pbData;
@@ -1015,85 +1308,6 @@ HRESULT CWaveFile::OpenFromMemory(BYTE *pbData, ULONG ulDataSize, WAVEFORMATEX *
 
     if (dwFlags != WAVEFILE_READ)
         return E_NOTIMPL;
-
-    return S_OK;
-}
-
-//-----------------------------------------------------------------------------
-// Name: CWaveFile::ReadMMIO()
-// Desc: Support function for reading from a multimedia I/O stream.
-//       m_hmmio must be valid before calling.  This function uses it to
-//       update m_ckRiff, and m_pwfx.
-//-----------------------------------------------------------------------------
-HRESULT CWaveFile::ReadMMIO()
-{
-    MMCKINFO ckIn;               // chunk info. for general use.
-    PCMWAVEFORMAT pcmWaveFormat; // Temp PCM structure to load in.
-
-    m_pwfx = NULL;
-
-    if ((0 != mmioDescend(m_hmmio, &m_ckRiff, NULL, 0)))
-        return DXTRACE_ERR(TEXT("mmioDescend"), E_FAIL);
-
-    // Check to make sure this is a valid wave file
-    if ((m_ckRiff.ckid != FOURCC_RIFF) || (m_ckRiff.fccType != mmioFOURCC('W', 'A', 'V', 'E')))
-        return DXTRACE_ERR_NOMSGBOX(TEXT("mmioFOURCC"), E_FAIL);
-
-    // Search the input file for for the 'fmt ' chunk.
-    ckIn.ckid = mmioFOURCC('f', 'm', 't', ' ');
-    if (0 != mmioDescend(m_hmmio, &ckIn, &m_ckRiff, MMIO_FINDCHUNK))
-        return DXTRACE_ERR(TEXT("mmioDescend"), E_FAIL);
-
-    // Expect the 'fmt' chunk to be at least as large as <PCMWAVEFORMAT>;
-    // if there are extra parameters at the end, we'll ignore them
-    if (ckIn.cksize < (LONG)sizeof(PCMWAVEFORMAT))
-        return DXTRACE_ERR(TEXT("sizeof(PCMWAVEFORMAT)"), E_FAIL);
-
-    // Read the 'fmt ' chunk into <pcmWaveFormat>.
-    if (mmioRead(m_hmmio, (HPSTR)&pcmWaveFormat, sizeof(pcmWaveFormat)) != sizeof(pcmWaveFormat))
-        return DXTRACE_ERR(TEXT("mmioRead"), E_FAIL);
-
-    // Allocate the waveformatex, but if its not pcm format, read the next
-    // word, and thats how many extra bytes to allocate.
-    if (pcmWaveFormat.wf.wFormatTag == WAVE_FORMAT_PCM)
-    {
-        m_pwfx = (WAVEFORMATEX *)new CHAR[sizeof(WAVEFORMATEX)];
-        if (NULL == m_pwfx)
-            return DXTRACE_ERR(TEXT("m_pwfx"), E_FAIL);
-
-        // Copy the bytes from the pcm structure to the waveformatex structure
-        memcpy(m_pwfx, &pcmWaveFormat, sizeof(pcmWaveFormat));
-        m_pwfx->cbSize = 0;
-    }
-    else
-    {
-        // Read in length of extra bytes.
-        WORD cbExtraBytes = 0L;
-        if (mmioRead(m_hmmio, (CHAR *)&cbExtraBytes, sizeof(WORD)) != sizeof(WORD))
-            return DXTRACE_ERR(TEXT("mmioRead"), E_FAIL);
-
-        m_pwfx = (WAVEFORMATEX *)new CHAR[sizeof(WAVEFORMATEX) + cbExtraBytes];
-        if (NULL == m_pwfx)
-            return DXTRACE_ERR(TEXT("new"), E_FAIL);
-
-        // Copy the bytes from the pcm structure to the waveformatex structure
-        memcpy(m_pwfx, &pcmWaveFormat, sizeof(pcmWaveFormat));
-        m_pwfx->cbSize = cbExtraBytes;
-
-        // Now, read those extra bytes into the structure, if cbExtraAlloc != 0.
-        if (mmioRead(m_hmmio, (CHAR *)(((BYTE *)&(m_pwfx->cbSize)) + sizeof(WORD)), cbExtraBytes) != cbExtraBytes)
-        {
-            SAFE_DELETE(m_pwfx);
-            return DXTRACE_ERR(TEXT("mmioRead"), E_FAIL);
-        }
-    }
-
-    // Ascend the input file out of the 'fmt ' chunk.
-    if (0 != mmioAscend(m_hmmio, &ckIn, 0))
-    {
-        SAFE_DELETE(m_pwfx);
-        return DXTRACE_ERR(TEXT("mmioAscend"), E_FAIL);
-    }
 
     return S_OK;
 }
@@ -1112,39 +1326,42 @@ DWORD CWaveFile::GetSize()
 // Desc: Resets the internal m_ck pointer so reading starts from the
 //       beginning of the file again
 //-----------------------------------------------------------------------------
-HRESULT CWaveFile::ResetFile()
+HRESULT CWaveFile::ResetFile(bool bLoop)
 {
+    DWORD unk;
+
     if (m_bIsReadingFromMemory)
     {
         m_pbDataCur = m_pbData;
+
+        if (m_pzwf->totalLength > 0)
+        {
+            m_ulDataSize = m_pzwf->totalLength;
+        }
+
+        if (bLoop && m_pzwf->introLength > 0)
+        {
+            m_pbDataCur += m_pzwf->introLength;
+        }
     }
     else
     {
-        if (m_hmmio == NULL)
-            return CO_E_NOTINITIALIZED;
-
-        if (m_dwFlags == WAVEFILE_READ)
+        if (m_hWaveFile == NULL)
         {
-            // Seek to the data
-            if (-1 == mmioSeek(m_hmmio, m_ckRiff.dwDataOffset + sizeof(FOURCC), SEEK_SET))
-                return DXTRACE_ERR(TEXT("mmioSeek"), E_FAIL);
+            return CO_E_NOTINITIALIZED;
+        }
 
-            // Search the input file for the 'data' chunk.
-            m_ck.ckid = mmioFOURCC('d', 'a', 't', 'a');
-            if (0 != mmioDescend(m_hmmio, &m_ck, &m_ckRiff, MMIO_FINDCHUNK))
-                return DXTRACE_ERR(TEXT("mmioDescend"), E_FAIL);
+        if (bLoop && m_pzwf->introLength > 0)
+        {
+            unk = SetFilePointer(m_hWaveFile,
+                                 g_SoundPlayer.unusedBgmSeekOffset + m_pzwf->introLength + m_pzwf->startOffset, 0,
+                                 FILE_BEGIN);
+            m_ck.cksize = m_pzwf->totalLength - m_pzwf->introLength;
         }
         else
         {
-            // Create the 'data' chunk that holds the waveform samples.
-            m_ck.ckid = mmioFOURCC('d', 'a', 't', 'a');
-            m_ck.cksize = 0;
-
-            if (0 != mmioCreateChunk(m_hmmio, &m_ck, 0))
-                return DXTRACE_ERR(TEXT("mmioCreateChunk"), E_FAIL);
-
-            if (0 != mmioGetInfo(m_hmmio, &m_mmioinfoOut, 0))
-                return DXTRACE_ERR(TEXT("mmioGetInfo"), E_FAIL);
+            unk = SetFilePointer(m_hWaveFile, g_SoundPlayer.unusedBgmSeekOffset + m_pzwf->startOffset, 0, FILE_BEGIN);
+            m_ck.cksize = m_pzwf->totalLength;
         }
     }
 
@@ -1174,6 +1391,7 @@ HRESULT CWaveFile::Read(BYTE *pBuffer, DWORD dwSizeToRead, DWORD *pdwSizeRead)
         }
 
         CopyMemory(pBuffer, m_pbDataCur, dwSizeToRead);
+        m_pbDataCur += dwSizeToRead;
 
         if (pdwSizeRead != NULL)
             *pdwSizeRead = dwSizeToRead;
@@ -1182,18 +1400,10 @@ HRESULT CWaveFile::Read(BYTE *pBuffer, DWORD dwSizeToRead, DWORD *pdwSizeRead)
     }
     else
     {
-        MMIOINFO mmioinfoIn; // current status of m_hmmio
-
-        if (m_hmmio == NULL)
+        if (m_hWaveFile == NULL)
             return CO_E_NOTINITIALIZED;
         if (pBuffer == NULL || pdwSizeRead == NULL)
             return E_INVALIDARG;
-
-        if (pdwSizeRead != NULL)
-            *pdwSizeRead = 0;
-
-        if (0 != mmioGetInfo(m_hmmio, &mmioinfoIn, 0))
-            return DXTRACE_ERR(TEXT("mmioGetInfo"), E_FAIL);
 
         UINT cbDataIn = dwSizeToRead;
         if (cbDataIn > m_ck.cksize)
@@ -1201,28 +1411,11 @@ HRESULT CWaveFile::Read(BYTE *pBuffer, DWORD dwSizeToRead, DWORD *pdwSizeRead)
 
         m_ck.cksize -= cbDataIn;
 
-        for (DWORD cT = 0; cT < cbDataIn; cT++)
-        {
-            // Copy the bytes from the io to the buffer.
-            if (mmioinfoIn.pchNext == mmioinfoIn.pchEndRead)
-            {
-                if (0 != mmioAdvance(m_hmmio, &mmioinfoIn, MMIO_READ))
-                    return DXTRACE_ERR(TEXT("mmioAdvance"), E_FAIL);
-
-                if (mmioinfoIn.pchNext == mmioinfoIn.pchEndRead)
-                    return DXTRACE_ERR(TEXT("mmioinfoIn.pchNext"), E_FAIL);
-            }
-
-            // Actual copy.
-            *((BYTE *)pBuffer + cT) = *((BYTE *)mmioinfoIn.pchNext);
-            mmioinfoIn.pchNext++;
-        }
-
-        if (0 != mmioSetInfo(m_hmmio, &mmioinfoIn, 0))
-            return DXTRACE_ERR(TEXT("mmioSetInfo"), E_FAIL);
+        DWORD dwSize;
+        ReadFile(m_hWaveFile, pBuffer, cbDataIn, &dwSize, NULL);
 
         if (pdwSizeRead != NULL)
-            *pdwSizeRead = cbDataIn;
+            *pdwSizeRead = dwSize;
 
         return S_OK;
     }
@@ -1236,49 +1429,8 @@ HRESULT CWaveFile::Close()
 {
     if (m_dwFlags == WAVEFILE_READ)
     {
-        mmioClose(m_hmmio, 0);
-        m_hmmio = NULL;
-    }
-    else
-    {
-        m_mmioinfoOut.dwFlags |= MMIO_DIRTY;
-
-        if (m_hmmio == NULL)
-            return CO_E_NOTINITIALIZED;
-
-        if (0 != mmioSetInfo(m_hmmio, &m_mmioinfoOut, 0))
-            return DXTRACE_ERR(TEXT("mmioSetInfo"), E_FAIL);
-
-        // Ascend the output file out of the 'data' chunk -- this will cause
-        // the chunk size of the 'data' chunk to be written.
-        if (0 != mmioAscend(m_hmmio, &m_ck, 0))
-            return DXTRACE_ERR(TEXT("mmioAscend"), E_FAIL);
-
-        // Do this here instead...
-        if (0 != mmioAscend(m_hmmio, &m_ckRiff, 0))
-            return DXTRACE_ERR(TEXT("mmioAscend"), E_FAIL);
-
-        mmioSeek(m_hmmio, 0, SEEK_SET);
-
-        if (0 != (INT)mmioDescend(m_hmmio, &m_ckRiff, NULL, 0))
-            return DXTRACE_ERR(TEXT("mmioDescend"), E_FAIL);
-
-        m_ck.ckid = mmioFOURCC('f', 'a', 'c', 't');
-
-        if (0 == mmioDescend(m_hmmio, &m_ck, &m_ckRiff, MMIO_FINDCHUNK))
-        {
-            DWORD dwSamples = 0;
-            mmioWrite(m_hmmio, (HPSTR)&dwSamples, sizeof(DWORD));
-            mmioAscend(m_hmmio, &m_ck, 0);
-        }
-
-        // Ascend the output file out of the 'RIFF' chunk -- this will cause
-        // the chunk size of the 'RIFF' chunk to be written.
-        if (0 != mmioAscend(m_hmmio, &m_ckRiff, 0))
-            return DXTRACE_ERR(TEXT("mmioAscend"), E_FAIL);
-
-        mmioClose(m_hmmio, 0);
-        m_hmmio = NULL;
+        CloseHandle(m_hWaveFile);
+        m_hWaveFile = INVALID_HANDLE_VALUE;
     }
 
     return S_OK;
@@ -1291,6 +1443,7 @@ HRESULT CWaveFile::Close()
 //       m_hmmio must be valid before calling.  This function uses it to
 //       update m_ckRiff, and m_ck.
 //-----------------------------------------------------------------------------
+#if 0
 HRESULT CWaveFile::WriteMMIO(WAVEFORMATEX *pwfxDest)
 {
     DWORD dwFactChunk; // Contains the actual fact chunk. Garbage until WaveCloseWriteFile.
@@ -1350,11 +1503,13 @@ HRESULT CWaveFile::WriteMMIO(WAVEFORMATEX *pwfxDest)
 
     return S_OK;
 }
+#endif
 
 //-----------------------------------------------------------------------------
 // Name: CWaveFile::Write()
 // Desc: Writes data to the open wave file
 //-----------------------------------------------------------------------------
+#if 0
 HRESULT CWaveFile::Write(UINT nSizeToWrite, BYTE *pbSrcData, UINT *pnSizeWrote)
 {
     UINT cT;
@@ -1385,4 +1540,5 @@ HRESULT CWaveFile::Write(UINT nSizeToWrite, BYTE *pbSrcData, UINT *pnSizeWrote)
 
     return S_OK;
 }
+#endif
 }; // namespace th08

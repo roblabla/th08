@@ -8,6 +8,7 @@
 #ifndef DSUTIL_H
 #define DSUTIL_H
 
+#include "inttypes.hpp"
 #include <dsound.h>
 #include <mmreg.h>
 #include <mmsystem.h>
@@ -22,6 +23,11 @@ class CSoundManager;
 class CSound;
 class CStreamingSound;
 class CWaveFile;
+
+//-----------------------------------------------------------------------------
+// Structs used by this header
+//-----------------------------------------------------------------------------
+struct ThBgmFormat;
 
 //-----------------------------------------------------------------------------
 // Typing macros
@@ -51,6 +57,9 @@ class CWaveFile;
 //-----------------------------------------------------------------------------
 class CSoundManager
 {
+    // This might not actually be true; it could be that zwave is compiled with inlining turned on
+    friend class CStreamingSound;
+
   protected:
     LPDIRECTSOUND8 m_pDS;
 
@@ -67,12 +76,18 @@ class CSoundManager
     HRESULT SetPrimaryBufferFormat(DWORD dwPrimaryChannels, DWORD dwPrimaryFreq, DWORD dwPrimaryBitRate);
     HRESULT Get3DListenerInterface(LPDIRECTSOUND3DLISTENER *ppDSListener);
 
+#if 0
     HRESULT Create(CSound **ppSound, LPTSTR strWaveFileName, DWORD dwCreationFlags = 0,
                    GUID guid3DAlgorithm = GUID_NULL, DWORD dwNumBuffers = 1);
-    HRESULT CreateFromMemory(CSound **ppSound, BYTE *pbData, ULONG ulDataSize, LPWAVEFORMATEX pwfx,
+    HRESULT CreateFromMemory(CSound **ppSound, BYTE *pbData, ULONG ulDataSize, ThBgmFormat *pzwf,
                              DWORD dwCreationFlags = 0, GUID guid3DAlgorithm = GUID_NULL, DWORD dwNumBuffers = 1);
+#endif
     HRESULT CreateStreaming(CStreamingSound **ppStreamingSound, LPTSTR strWaveFileName, DWORD dwCreationFlags,
-                            GUID guid3DAlgorithm, DWORD dwNotifyCount, DWORD dwNotifySize, HANDLE hNotifyEvent);
+                            GUID guid3DAlgorithm, DWORD dwNotifyCount, DWORD dwNotifySize, HANDLE hNotifyEvent,
+                            ThBgmFormat *pzwf);
+    HRESULT CreateStreamingFromMemory(CStreamingSound **ppStreamingSound, BYTE *pbData, ULONG ulDataSize,
+                                      ThBgmFormat *pzwf, DWORD dwCreationFlags, GUID guid3DAlgorithm,
+                                      DWORD dwNumBuffers, DWORD dwNotifySize, HANDLE hNotifyEvent);
 };
 
 //-----------------------------------------------------------------------------
@@ -96,7 +111,7 @@ class CSound
     DWORD m_unk28;
     DWORD m_unk2c;
     BOOL m_bIsPlaying;
-    DSBUFFERDESC m_dbsd;
+    DSBUFFERDESC m_dsbd;
     CSoundManager *m_pSoundManager;
 
     HRESULT RestoreBuffer(LPDIRECTSOUNDBUFFER pDSB, BOOL *pbWasRestored);
@@ -114,6 +129,11 @@ class CSound
     HRESULT Stop();
     HRESULT Reset();
     BOOL IsSoundPlaying();
+
+    // Modifications made by ZUN to this class
+    HRESULT SetVolume(i32 iVolume);
+    HRESULT Pause();
+    HRESULT Unpause();
 };
 
 //-----------------------------------------------------------------------------
@@ -125,6 +145,8 @@ class CSound
 //-----------------------------------------------------------------------------
 class CStreamingSound : public CSound
 {
+    friend class CSoundManager;
+
   protected:
     DWORD m_dwLastPlayPos;
     DWORD m_dwPlayProgress;
@@ -133,8 +155,8 @@ class CStreamingSound : public CSound
 
     // Modifications by ZUN to this class
     DWORD m_dwNotifySize;
-    DWORD m_hNotifyEvent;
-    DWORD m_unk74;
+    HANDLE m_hNotifyEvent;
+    BOOL m_bIsLocked;
 
   public:
     CStreamingSound(LPDIRECTSOUNDBUFFER pDSBuffer, DWORD dwDSBufferSize, CWaveFile *pWaveFile, DWORD dwNotifySize);
@@ -142,6 +164,18 @@ class CStreamingSound : public CSound
 
     HRESULT HandleWaveStreamNotification(BOOL bLoopedPlay);
     HRESULT Reset();
+
+    // Modifications by ZUN to this class
+    HRESULT InitSoundBuffers();
+    HRESULT UpdateFadeOut();
+    HRESULT UpdateFadeIn();
+    HRESULT UpdateShortFadeIn();
+    HRESULT UpdateShortFadeOut();
+    void FadeOut(f32 seconds)
+    {
+        m_iFadeType = 1;
+        m_iTotalFade = m_iCurFadeProgress = seconds * 60;
+    }
 };
 
 //-----------------------------------------------------------------------------
@@ -151,11 +185,11 @@ class CStreamingSound : public CSound
 class CWaveFile
 {
   public:
-    WAVEFORMATEX *m_pwfx; // Pointer to WAVEFORMATEX structure
-    HMMIO m_hmmio;        // MM I/O handle for the WAVE
-    MMCKINFO m_ck;        // Multimedia RIFF chunk
-    MMCKINFO m_ckRiff;    // Use in opening a WAVE file
-    DWORD m_dwSize;       // The size of the wave file
+    // WAVEFORMATEX *m_pwfx; // Pointer to WAVEFORMATEX structure
+    HMMIO m_hmmio;     // MM I/O handle for the WAVE
+    MMCKINFO m_ck;     // Multimedia RIFF chunk
+    MMCKINFO m_ckRiff; // Use in opening a WAVE file
+    DWORD m_dwSize;    // The size of the wave file
     MMIOINFO m_mmioinfoOut;
     DWORD m_dwFlags;
     BOOL m_bIsReadingFromMemory;
@@ -165,6 +199,7 @@ class CWaveFile
 
     // Modifications by ZUN to this class
     HANDLE m_hWaveFile;
+    ThBgmFormat *m_pzwf;
 
   protected:
     HRESULT ReadMMIO();
@@ -174,19 +209,36 @@ class CWaveFile
     CWaveFile();
     ~CWaveFile();
 
-    HRESULT Open(LPTSTR strFileName, WAVEFORMATEX *pwfx, DWORD dwFlags);
-    HRESULT OpenFromMemory(BYTE *pbData, ULONG ulDataSize, WAVEFORMATEX *pwfx, DWORD dwFlags);
+    HRESULT Open(LPTSTR strFileName, ThBgmFormat *pzwf, DWORD dwFlags);
+    HRESULT OpenFromMemory(BYTE *pbData, ULONG ulDataSize, ThBgmFormat *pzwf, DWORD dwFlags);
     HRESULT Close();
 
     HRESULT Read(BYTE *pBuffer, DWORD dwSizeToRead, DWORD *pdwSizeRead);
     HRESULT Write(UINT nSizeToWrite, BYTE *pbData, UINT *pnSizeWrote);
 
     DWORD GetSize();
-    HRESULT ResetFile();
-    WAVEFORMATEX *GetFormat()
+    HRESULT ResetFile(bool bLoop);
+    ThBgmFormat *GetFormat()
     {
-        return m_pwfx;
+        return m_pzwf;
     };
+
+    // Modifications by ZUN to this class
+    HRESULT Reopen(ThBgmFormat *pzwf);
+};
+
+//-----------------------------------------------------------------------------
+// Name: struct ThBgmFormat
+// Desc:
+//-----------------------------------------------------------------------------
+struct ThBgmFormat
+{
+    char name[16];
+    i32 startOffset;
+    DWORD preloadAllocSize;
+    i32 introLength;
+    i32 totalLength;
+    WAVEFORMATEX format;
 };
 }; // namespace th08
 
